@@ -1,0 +1,183 @@
+Cell 1 - Import stuff 
+
+from pyspark.sql.functions import col
+from pyspark.sql.types import IntegerType, DoubleType, BooleanType, DateType
+------------------------------------------------------------------------------------
+Cell 2 - Config and Mount
+
+%python
+# Unmount the existing mount point if it exists
+dbutils.fs.unmount("/mnt/olympics-tokyo-project")
+
+configs = {
+  "fs.azure.account.auth.type": "CustomAccessToken",
+  "fs.azure.account.custom.token.provider.class": spark.conf.get("spark.databricks.passthrough.adls.gen2.tokenProviderClassName")
+}
+
+# Optionally, you can add <directory-name> to the source URI of your mount point.
+dbutils.fs.mount(
+  source = "abfss://olympics-tokyo-project@shaysynstor01.dfs.core.windows.net/",
+  mount_point = "/mnt/olympics-tokyo-project",
+  extra_configs = configs)
+------------------------------------------------------------------------------------
+Cell 3 - print
+
+dbutils.fs.ls("/mnt/olympics-tokyo-project")
+
+output:-
+[FileInfo(path='dbfs:/mnt/olympics-tokyo-project/raw-data/', name='raw-data/', size=0, modificationTime=1744792840000),
+ FileInfo(path='dbfs:/mnt/olympics-tokyo-project/transform-data/', name='transform-data/', size=0, modificationTime=1744792853000)]
+
+------------------------------------------------------------------------------------
+
+Cell 4 - Load data
+
+athletes = spark.read.format("csv").option("header","true").option("inferSchema", "true").load("/mnt/olympics-tokyo-project/raw-data/athletes.csv")
+Coaches = spark.read.format("csv").option("header","true").option("inferSchema", "true").load("/mnt/olympics-tokyo-project/raw-data/Coaches.csv")
+EntriesGender = spark.read.format("csv").option("header","true").option("inferSchema", "true").load("/mnt/olympics-tokyo-project/raw-data/EntriesGEnder.csv")
+Medals = spark.read.format("csv").option("header","true").option("inferSchema", "true").load("/mnt/olympics-tokyo-project/raw-data/Medals.csv")
+Teams = spark.read.format("csv").option("header","true").option("inferSchema", "true").load("/mnt/olympics-tokyo-project/raw-data/Teams.csv")
+
+---------------------------------------------------------------------------------------------
+
+Cell 5 - athletes.show()
+
+output:-
+
++--------------------+--------------------+-------------------+
+|                Name|                 NOC|         Discipline|
++--------------------+--------------------+-------------------+
+|     AALERUD Katrine|              Norway|       Cycling Road|
+|         ABAD Nestor|               Spain|Artistic Gymnastics|
+|   ABAGNALE Giovanni|               Italy|             Rowing|
+|      ABALDE Alberto|               Spain|         Basketball|
+|       ABALDE Tamara|               Spain|         Basketball|
+|           ABALO Luc|              France|           Handball|
+|        ABAROA Cesar|               Chile|             Rowing|
+|       ABASS Abobakr|               Sudan|           Swimming|
+|    ABBASALI Hamideh|Islamic Republic ...|             Karate|
+|       ABBASOV Islam|          Azerbaijan|          Wrestling|
+|        ABBINGH Lois|         Netherlands|           Handball|
+|         ABBOT Emily|           Australia|Rhythmic Gymnastics|
+|       ABBOTT Monica|United States of ...|  Baseball/Softball|
+|ABDALLA Abubaker ...|               Qatar|          Athletics|
+|      ABDALLA Maryam|               Egypt|  Artistic Swimming|
+|      ABDALLAH Shahd|               Egypt|  Artistic Swimming|
+| ABDALRASOOL Mohamed|               Sudan|               Judo|
+|   ABDEL LATIF Radwa|               Egypt|           Shooting|
+|    ABDEL RAZEK Samy|               Egypt|           Shooting|
+|   ABDELAZIZ Abdalla|               Egypt|             Karate|
++--------------------+--------------------+-------------------+
+only showing top 20 rows
+
+
+---------------------------------------------------------------------------------------------
+
+
+Cell 5 - print schema
+
+athletes.printSchema()
+
+output:-
+
+root
+ |-- Name: string (nullable = true)
+ |-- NOC: string (nullable = true)
+ |-- Discipline: string (nullable = true)
+
+--------------------------------------------------------------------------------------------
+
+Cell 6 - Transform data using typecasting 
+
+EntriesGender = EntriesGender.withColumn("Female",col("Female").cast(IntegerType()))\
+.withColumn("Male",col("Male").cast(IntegerType()))\
+.withColumn("Total",col("Total").cast(IntegerType()))
+
+athletes.printSchema()
+
+output:-
+
+root
+ |-- Discipline: string (nullable = true)
+ |-- Female: integer (nullable = true)
+ |-- Male: integer (nullable = true)
+ |-- Total: integer (nullable = true)
+
+-----------------------------------------------------------------------------------------
+
+Cell 7 - # Find the top countries with the highest number of gold medals
+top_gold_medal_countries = Medals.orderBy("Gold", ascending=False).select("Team/NOC","Gold").show()
+
+output:-
+
++--------------------+----+
+|            Team/NOC|Gold|
++--------------------+----+
+|United States of ...|  39|
+|People's Republic...|  38|
+|               Japan|  27|
+|       Great Britain|  22|
+|                 ROC|  20|
+|           Australia|  17|
+|         Netherlands|  10|
+|              France|  10|
+|             Germany|  10|
+|               Italy|  10|
+|                Cuba|   7|
+|         New Zealand|   7|
+|              Brazil|   7|
+|              Canada|   7|
+|             Hungary|   6|
+|   Republic of Korea|   6|
+|               Kenya|   4|
+|              Poland|   4|
+|      Czech Republic|   4|
+|              Norway|   4|
++--------------------+----+
+only showing top 20 rows
+----------------------------------------------------------------------------------------------------
+
+
+Cell 8 - # Calculate the average number of entries by gender for each discipline
+average_entries_by_gender = EntriesGender.withColumn(
+    'Avg_Female', EntriesGender['Female'] / EntriesGender['Total']
+).withColumn(
+    'Avg_Male', EntriesGender['Male'] / EntriesGender['Total']
+)
+average_entries_by_gender.show()
+
+
+output :- 
+
++--------------------+------+----+-----+-------------------+-------------------+
+|          Discipline|Female|Male|Total|         Avg_Female|           Avg_Male|
++--------------------+------+----+-----+-------------------+-------------------+
+|      3x3 Basketball|    32|  32|   64|                0.5|                0.5|
+|             Archery|    64|  64|  128|                0.5|                0.5|
+| Artistic Gymnastics|    98|  98|  196|                0.5|                0.5|
+|   Artistic Swimming|   105|   0|  105|                1.0|                0.0|
+|           Athletics|   969|1072| 2041| 0.4747672709456149| 0.5252327290543851|
+|           Badminton|    86|  87|  173|0.49710982658959535| 0.5028901734104047|
+|   Baseball/Softball|    90| 144|  234|0.38461538461538464| 0.6153846153846154|
+|          Basketball|   144| 144|  288|                0.5|                0.5|
+|    Beach Volleyball|    48|  48|   96|                0.5|                0.5|
+|              Boxing|   102| 187|  289|0.35294117647058826| 0.6470588235294118|
+|        Canoe Slalom|    41|  41|   82|                0.5|                0.5|
+|        Canoe Sprint|   123| 126|  249| 0.4939759036144578| 0.5060240963855421|
+|Cycling BMX Frees...|    10|   9|   19| 0.5263157894736842|0.47368421052631576|
+|  Cycling BMX Racing|    24|  24|   48|                0.5|                0.5|
+|Cycling Mountain ...|    38|  38|   76|                0.5|                0.5|
+|        Cycling Road|    70| 131|  201| 0.3482587064676617| 0.6517412935323383|
+|       Cycling Track|    90|  99|  189|0.47619047619047616| 0.5238095238095238|
+|              Diving|    72|  71|  143| 0.5034965034965035| 0.4965034965034965|
+|          Equestrian|    73| 125|  198| 0.3686868686868687| 0.6313131313131313|
+|             Fencing|   107| 108|  215|0.49767441860465117| 0.5023255813953489|
++--------------------+------+----+-----+-------------------+-------------------+
+only showing top 20 rows
+
+
+----------------------------------------------------------------------------------------------
+
+cell - 9 - to write data in datalake in transform-data
+
+athletes.write.option("header","true").mode("overwrite").csv("/mnt/olympics-tokyo-project/transform-data/")
