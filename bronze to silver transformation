@@ -1,0 +1,144 @@
+Cell 1: Exploring the Directory & Reading One Table
+
+dbutils.fs.ls('mnt/bronze/SalesLT/')
+dbutils.fs.ls('mnt/silver/')
+
+ Explanation:
+dbutils.fs.ls(): Lists files/folders in a path.
+
+Here you're checking what data is available in the bronze (raw) and silver (processed) layers.
+
+input_path = '/mnt/bronze/SalesLT/Address/Address.parquet'
+df = spark.read.format('parquet').load(input_path)
+
+
+Explanation:
+spark.read.format('parquet').load(): Reads a Parquet file (a highly efficient columnar storage format).
+
+input_path: Path to the Address table Parquet file.
+
+df: The resulting DataFrame (table-like structure in Spark).
+
+
+df:pyspark.sql.dataframe.DataFrame = [AddressID: integer, AddressLine1: string ... 7 more fields]
+
+
+ Explanation:
+This shows the schema of the DataFrame df.
+
+Each column has a name and a data type.
+
+Cell 2: Converting the Date Format in One Table
+
+
+from pyspark.sql.functions import from_utc_timestamp, date_format
+from pyspark.sql.types import TimestampType
+
+
+Explanation of the imports:
+from_utc_timestamp(col, "UTC"): Converts a UTC timestamp to a local time (though in your case it stays UTC).
+
+date_format(col, "yyyy-MM-dd"): Changes timestamp to a simple date string like 2025-04-18.
+
+TimestampType: Ensures that the column is treated as a proper datetime.
+
+
+
+df = df.withColumn("ModifiedDate", date_format(from_utc_timestamp(df["ModifiedDate"].cast(TimestampType()), "UTC"), "yyyy-MM-dd"))
+
+
+
+Explanation:
+withColumn(): Updates a column or adds a new one.
+
+You’re converting the ModifiedDate from a timestamp to just yyyy-MM-dd format.
+
+This is often done to standardize date formats before storing in silver/gold layers.
+
+
+Cell 3: Extracting All Table Names from Bronze Layer
+
+
+table_name = []
+
+for i in dbutils.fs.ls('mnt/bronze/SalesLT/'):
+    table_name.append(i.name.split('/')[0])
+
+
+
+Explanation:
+Loops through folders inside /mnt/bronze/SalesLT/
+
+i.name.split('/')[0]: Removes trailing / to get just the folder name.
+
+Adds all table names to table_name list (like Address, Customer, etc.)
+
+✅ Why this? So that we can dynamically process all tables without hardcoding names.
+
+
+table_name
+['Address', 'Customer', ..., 'SalesOrderHeader']
+
+
+Cell 4: Looping Through All Tables, Formatting Dates, and Writing to Silver Layer
+
+from pyspark.sql.functions import from_utc_timestamp, date_format
+from pyspark.sql.types import TimestampType
+
+
+for i in table_name:
+    path = '/mnt/bronze/SalesLT/' + i + '/' + i + '.parquet'
+    df = spark.read.format('parquet').load(path)
+    column = df.columns
+
+
+ Explanation:
+Dynamically builds the path for each table using its name.
+
+Reads each .parquet file into a DataFrame.
+
+Gets all column names to check for date fields.
+
+    for col in column:
+        if "Date" in col or "date" in col:
+            df = df.withColumn(
+                col, 
+                date_format(
+                    from_utc_timestamp(df[col].cast(TimestampType()), "UTC"), 
+                    "yyyy-MM-dd"
+                )
+            )
+
+
+
+Explanation:
+For each column in the DataFrame:
+
+If the column name contains “Date” (case-insensitive), it's assumed to be a date column.
+
+It's cast to TimestampType, converted from UTC, and formatted to "yyyy-MM-dd".
+
+✅ Why this? To clean and standardize all date fields across all tables.
+
+
+    output_path = '/mnt/silver/SalesLT/' + i + '/'
+    df.write.format('delta').mode("overwrite").save(output_path)
+
+
+
+
+Explanation:
+Writes the transformed DataFrame to the silver layer.
+
+Format used is Delta Lake, which supports ACID transactions, versioning, and efficient queries.
+
+✅ mode("overwrite"): Replaces existing data – commonly used in development or reprocessing.
+
+
+Final Summary (by Cell)
+Cell	Purpose
+Cell 1	List directories, read one Parquet table, and display it.
+Cell 2	Convert a date field to a readable format (yyyy-MM-dd).
+Cell 3	Dynamically get all table names from bronze layer.
+Cell 4	Loop through each table: read, detect date columns, format them, and write to silver layer in Delta format.
+
