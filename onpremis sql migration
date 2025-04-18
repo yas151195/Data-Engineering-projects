@@ -1,0 +1,86 @@
+Cell 1: Mounting the Bronze Container from ADLS (Azure Data Lake Storage)
+
+# Creating a configuration dictionary for authentication
+configs = {
+  "fs.azure.account.auth.type": "CustomAccessToken",  # This sets the authentication type to custom token-based
+  "fs.azure.account.custom.token.provider.class": spark.conf.get("spark.databricks.passthrough.adls.gen2.tokenProviderClassName")
+}
+
+ Explanation:
+
+fs.azure.account.auth.type: This tells Databricks how to authenticate to Azure Data Lake.
+
+CustomAccessToken means we're using the Azure credential passthrough mechanism to automatically pass user credentials securely.
+
+fs.azure.account.custom.token.provider.class: This dynamically fetches the class responsible for providing the access token needed to connect to ADLS Gen2.
+
+The spark.conf.get(...) gets the token provider class configured by Databricks to handle secure token-based authentication.
+
+# Mounting the 'bronze' ADLS Gen2 container to Databricks File System
+dbutils.fs.mount(
+  source = "abfss://bronze@shaysynstor01.dfs.core.windows.net/",  # ADLS container path (bronze layer)
+  mount_point = "/mnt/bronze",  # This is the mount point inside Databricks
+  extra_configs = configs  # Authentication configs
+)
+
+ Explanation:
+
+dbutils.fs.mount(): This is used to mount external storage (like ADLS) into the Databricks File System (/dbfs), so you can access it like a regular folder.
+
+abfss://...: This is the secure protocol used to access Azure Data Lake Gen2.
+
+/mnt/bronze: This is a logical mount point in Databricks where your storage is linked. You can browse files like they’re local.
+
+
+Cell 2: Listing Contents of the Bronze Mount
+dbutils.fs.ls("/mnt/bronze")
+
+[FileInfo(path='dbfs:/mnt/bronze/SalesLT/', name='SalesLT/', size=0, modificationTime=1743916883000)]
+Shows there's a folder called SalesLT inside /mnt/bronze.
+
+
+Cell 4: Mounting Silver and Gold Layers
+
+configs = {
+  "fs.azure.account.auth.type": "CustomAccessToken",
+  "fs.azure.account.custom.token.provider.class": spark.conf.get("spark.databricks.passthrough.adls.gen2.tokenProviderClassName")
+}
+
+dbutils.fs.mount(
+  source = "abfss://silver@shaysynstor01.dfs.core.windows.net/",
+  mount_point = "/mnt/silver",
+  extra_configs = configs)
+
+
+configs = {
+  "fs.azure.account.auth.type": "CustomAccessToken",
+  "fs.azure.account.custom.token.provider.class": spark.conf.get("spark.databricks.passthrough.adls.gen2.tokenProviderClassName")
+}
+
+dbutils.fs.mount(
+  source = "abfss://gold@shaysynstor01.dfs.core.windows.net/",
+  mount_point = "/mnt/gold",
+  extra_configs = configs)
+
+
+Explanation:
+
+This follows the same pattern as mounting bronze but for:
+
+Silver layer: Cleaned/transformed data from the bronze layer.
+
+Gold layer: Aggregated, business-ready datasets.
+
+💡 Bronze / Silver / Gold refers to the medallion architecture used in data engineering to organize data by refinement stage:
+
+Bronze = raw data
+
+Silver = cleaned/transformed data
+
+Gold = business-level, aggregated insights
+
+Cell	Purpose
+Cell 1	Mounting the bronze layer from Azure Data Lake using secure token-based authentication.
+Cell 2	Listing contents in the bronze layer root directory.
+Cell 3	Listing subfolders (likely tables like Address, Customer) in the SalesLT folder.
+Cell 4	Mounting the silver and gold layers for accessing cleaned and business-level data.
