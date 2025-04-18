@@ -1,0 +1,134 @@
+USE Final_Gold_Stage_DB
+GO
+
+CREATE OR ALTER PROC CreateSQLServerlessView_gold @ViewName NVARCHAR(100)
+AS
+BEGIN
+    DECLARE @statement NVARCHAR(MAX)
+
+    SET @statement = N'CREATE OR ALTER VIEW ' + QUOTENAME(@ViewName) + N' AS
+    SELECT * 
+    FROM
+        OPENROWSET(
+            BULK ''https://shaysynstor01.dfs.core.windows.net/gold/SalesLT/' + @ViewName + N'/'' ,
+            FORMAT = ''DELTA''
+        ) AS [result];'
+
+    EXEC sp_executesql @statement
+END
+GO
+
+
+
+--------------------------------------------------------------------------------------------
+Simple Query run ins synape workspace 
+--------------------------------------------------------------------------------------------
+
+SELECT TOP (100) [Address_ID]
+,[Address_Line1]
+,[Address_Line2]
+,[City]
+,[State_Province]
+,[Country_Region]
+,[Postal_Code]
+,[rowguid]
+,[Modified_Date]
+ FROM [dbo].[address]
+
+
+--------------------------------------------------------------------------------------------
+Query to insert data in on premises SQL server
+-------------------------------------------------------------------------------------------
+
+SELECT * FROM SalesLT.Customer
+
+SELECT COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'Customer' AND TABLE_SCHEMA = 'SalesLT';
+
+
+--------------------------------------------------------------------------------------------
+-- Enable identity insert to manually set CustomerID
+SET IDENTITY_INSERT [AdventureWorksLT2022].[SalesLT].[Customer] ON;
+
+INSERT INTO [AdventureWorksLT2022].[SalesLT].[Customer] (
+    CustomerID,
+    NameStyle,
+    Title,
+    FirstName,
+    MiddleName,
+    LastName,
+    Suffix,
+    CompanyName,
+    SalesPerson,
+    EmailAddress,
+    Phone,
+    PasswordHash,
+    PasswordSalt,
+    rowguid,
+    ModifiedDate
+)
+VALUES (
+    1004,  -- Make sure this CustomerID does not already exist
+    0,
+    'Ms.',
+    'Sophia',
+    'L.',
+    'Smith',
+    NULL,
+    'Contoso Bikes',
+    'adventure-works\\michaels',
+    'sophia.smith@contoso.com',
+    '555-123-4567',
+    'Xyz1234567890abcdef=',
+    'AbcXYZ==',
+    NEWID(),  -- Automatically generates a unique rowguid
+    GETDATE() -- Uses current date & time
+);
+
+-- Disable identity insert
+SET IDENTITY_INSERT [AdventureWorksLT2022].[SalesLT].[Customer] OFF;
+
+-----------------------------------------------------------------------------------
+
+
+
+-- Let SQL Server generate a unique GUID
+SET IDENTITY_INSERT [AdventureWorksLT2022].[SalesLT].[Customer] ON;
+
+INSERT INTO [AdventureWorksLT2022].[SalesLT].[Customer] (
+    CustomerID,
+    NameStyle,
+    Title,
+    FirstName,
+    MiddleName,
+    LastName,
+    Suffix,
+    CompanyName,
+    SalesPerson,
+    EmailAddress,
+    Phone,
+    PasswordHash,
+    PasswordSalt,
+    rowguid,
+    ModifiedDate
+)
+VALUES (
+    1003,
+    0,
+    'Mr.',
+    'Orlando',
+    'N.',
+    'Gee',
+    NULL,
+    'A Bike Store',
+    'adventure-works\\pamela0',
+    'orlando0@adventure-works.com',
+    '245-555-0173',
+    'L/Rlwxzp4w7RWmEgXX+/A7cXaePEPcp+KwQhl2fJL7w=',
+    '1KjXYs4=',
+    NEWID(), -- generate unique rowguid
+    '2005-08-01 00:00:00.000'
+);
+
+SET IDENTITY_INSERT [AdventureWorksLT2022].[SalesLT].[Customer] OFF;
