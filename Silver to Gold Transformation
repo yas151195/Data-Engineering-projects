@@ -1,0 +1,114 @@
+Cell 1: List and Load Delta Table from Silver
+
+dbutils.fs.ls('mnt/silver/SalesLT/')
+dbutils.fs.ls('mnt/gold/')
+df = spark.read.format('delta').load(input_path)
+
+Explanation:
+dbutils.fs.ls(): Lists files/folders in a directory.
+
+Lists what's present in the silver and gold layers.
+
+spark.read.format('delta'): Reads a Delta Lake table. Delta is an open-source storage format that brings ACID transactions to Apache Spark.
+
+input_path: You should define this variable before using it here (probably pointing to a Delta table in the Silver layer).
+
+
+Cell 2: Convert Column Names to Snake Case Format
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, regexp_replace
+
+# get the list of colum names
+column_names = df.columns
+
+
+Explanation:
+Imports necessary modules from PySpark.
+
+col: Allows column-wise operations.
+
+regexp_replace: Performs regex-based text replacement.
+
+df.columns: Gets the list of column names.
+
+
+
+for old_col_name in column_names:
+    # Convert column name from ColumnName to Column_Name format
+    new_col_name = "".join(["_" + char if char.isupper() and not old_col_name[i-1].isupper() else char for i, char in enumerate(old_col_name)]).lstrip("_")
+    
+    # Change the column name using withColumnRenamed
+    df  = df.withColumnRenamed(old_col_name, new_col_name)
+
+ Explanation:
+This logic converts CamelCase or PascalCase column names (like ModifiedDate) into snake_case (Modified_Date).
+
+.withColumnRenamed(): Renames a column in a DataFrame.
+
+lstrip("_"): Removes any leading underscores (cleaning up the result).
+
+✅ Why?
+To standardize column names — snake_case is easier to work with for queries and compatible with most tools.
+
+Cell 3: Get All Table Names from Silver
+
+table_name = []
+
+for i in dbutils.fs.ls('mnt/silver/SalesLT/'):
+    table_name.append(i.name.split('/')[0])
+
+
+Explanation:
+Loops through the folder names inside SalesLT under the Silver layer.
+
+Removes trailing slashes to extract folder (table) names like Customer, Product, etc.
+
+Cell 4: Loop Through All Tables – Rename Columns – Write to Gold
+
+for name in table_name:
+    path = '/mnt/silver/SalesLT/' + name
+    print(path)
+    df = spark.read.format('delta').load(path)
+
+
+Explanation:
+For each table name, builds the path to that table.
+
+Loads it as a Delta table from the Silver layer.
+
+
+    # Get the list of column names
+    column_names = df.columns
+
+    for old_col_name in column_names:
+        new_col_name = "".join(["_" + char if char.isupper() and not old_col_name[i-1].isupper() else char for i, char in enumerate(old_col_name)]).lstrip("_")
+        df  = df.withColumnRenamed(old_col_name, new_col_name)
+
+
+Explanation:
+Same snake_case conversion logic used earlier — this time applied to every table.
+
+Ensures all columns across all tables follow a consistent naming style.
+
+python
+Copy
+Edit
+    output_path = '/mnt/gold/SalesLT/' + name + '/'
+    df.write.format('delta').mode("overwrite").save(output_path)
+🔹 Explanation:
+Saves the renamed DataFrame to the Gold layer.
+
+Stored as a Delta Table.
+
+mode("overwrite"): Replaces existing data in that location.
+
+✅ Why this cell?
+This step pushes your cleaned and standardized tables from Silver → Gold layer — ready for analytics or reporting.
+
+✅ Full Notebook Flow Summary
+Cell	Purpose	Key Concepts Used
+Cell 1	List folders and load one Delta table from Silver.	Delta, spark.read, dbutils.fs.ls
+Cell 2	Convert one table’s column names from CamelCase to snake_case.	withColumnRenamed, string logic
+Cell 3	Dynamically get all table names from Silver.	dbutils.fs.ls, split()
+Cell 4	Loop through all tables: load → rename columns → write to Gold layer.	Delta write, looping, transformation
