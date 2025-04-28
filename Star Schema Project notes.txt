@@ -1,0 +1,79 @@
+Query to create source table in SQL DATABASE-
+
+CREATE TABLE source_cars_data
+(
+    Branch_ID Varchar(200),
+    Dealer_ID Varchar(200),
+    Model_ID Varchar(200),
+    Revenue BIGINT,
+    Units_Sold BIGINT,
+    Date_ID Varchar(200),
+    Day INT,
+    Month INT,
+    Year INT,
+    BranchName Varchar(200),
+    DealerName Varchar(200)
+)
+
+SELECT * FROM source_cars_data
+
+
+Github Base URL - https://raw.githubusercontent.com/
+Github relative URL - yas151195/Data-Engineering-projects/refs/heads/main/SalesData.csv
+
+linked services created with parametrized.
+like above we have Github relative URL "yas151195/Data-Engineering-projects/refs/heads/main/SalesData.csv"
+so suppose we hahve different file instead of SalesData.csv so we can edit only that part innstead of changing the whole url. -
+
+how to give that Parameter  - yas151195/Data-Engineering-projects/refs/heads/main/@{dataset().load_flag}
+here load_flag is parameter name and their value is SalesData.csv(dynamically)
+
+
+look up activity for last_load - 
+query below:-
+
+select * from water_table;
+
+look up activity for current_load - 
+query below:-
+
+select max(Date_ID) as max_date from source_cars_data;
+
+Actual incremental pipeline - 
+
+SELECT * FROM source_cars_data WHERE Date_ID > '@{activity('last_load').output.value[0].last_load}' AND Date_ID <= '@{activity('current_load').output.value[0].max_date}'
+
+
+Databricks ------Compute creation
+
+To create catalouge we must have to enable manage account which can be done by providing "Microsoft intra id" details
+
+Overview > Manage > Users > click on account name > copy that hash-tag# id and paste in > google > https://accounts.azuredatabricks.net/ > where it will ask - ameenwaziha7_gmail.com#EXT#@ameenwaziha7gmail.onmicrosoft.com
+
+now we able to see manage account option in databricks.
+
+
+Crate access controll for databricks to integrate with datalake gen 2 storage.
+ans assign role of storage blob contributor to access control for databricks
+
+unitymetastore@shaysynstor01
+
+abfss://rawlayer@shaysynstor01.dfs.core.windows.net
+abfss://foundationlayer@shaysynstor01.dfs.core.windows.net
+abfss://consuptionlayer@shaysynstor01.dfs.core.windows.net
+
+
+
+CREATE PROCEDURE UpdateWatermarkTable
+@lastload Varchar(200)
+AS
+BEGIN
+--- Start the Transaction
+BEGIN Transaction;
+
+---Update the Incremental column in the table
+UPDATE water_table
+SET last_load = @lastload
+COMMIT Transaction;
+
+END;
